@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>待办事项</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -477,31 +478,22 @@
 </div>
 
 <script>
+// ── Supabase 初始化 ──
+const { createClient } = supabase;
+const db = createClient(
+  'https://bakiznyrvrckpkygmstm.supabase.co',
+  'sb_publishable_jE7dIEYCieMmTFsViqK4_Q_lkXTuJwo'
+);
+
 // ── State ──
 let tasks = [];
 let filter = 'all';
 let selectedPriority = 'low';
 let editingId = null;
 
-const STORAGE_KEY = 'todo_tasks_v1';
-
-function loadTasks() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) tasks = JSON.parse(raw);
-  } catch(e) { tasks = []; }
-}
-
-function saveTasks() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-}
-
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
+// ── Helpers ──
 function today() {
-  return new Date().toISOString().slice(0,10);
+  return new Date().toISOString().slice(0, 10);
 }
 
 function isOverdue(task) {
@@ -510,8 +502,19 @@ function isOverdue(task) {
 
 function formatDate(d) {
   if (!d) return '';
-  const [y,m,day] = d.split('-');
+  const [y, m, day] = d.split('-');
   return `${m}/${day}`;
+}
+
+// ── DB：读取所有任务 ──
+async function loadTasks() {
+  const { data, error } = await db
+    .from('todos')
+    .select('*')
+    .order('id', { ascending: false });
+  if (error) { console.error('loadTasks error:', error.message); return; }
+  tasks = data || [];
+  render();
 }
 
 // ── Render ──
@@ -526,32 +529,32 @@ function render() {
     return true;
   });
 
-  // sort: overdue first, then by priority, then by creation
-  const pOrder = { high:0, med:1, low:2, none:3 };
-  visible.sort((a,b) => {
+  // sort: overdue first, then by priority, then by id desc
+  const pOrder = { high: 0, med: 1, low: 2, none: 3 };
+  visible.sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
     const aOver = isOverdue(a) ? 0 : 1;
     const bOver = isOverdue(b) ? 0 : 1;
     if (aOver !== bOver) return aOver - bOver;
-    return (pOrder[a.priority]||3) - (pOrder[b.priority]||3);
+    return (pOrder[a.priority] || 3) - (pOrder[b.priority] || 3);
   });
 
-  const done = tasks.filter(t=>t.done).length;
+  const done  = tasks.filter(t => t.done).length;
   const total = tasks.length;
   document.getElementById('stats-text').textContent = `${done} / ${total} 已完成`;
 
-  const active = tasks.filter(t=>!t.done).length;
+  const active = tasks.filter(t => !t.done).length;
   document.getElementById('remaining-text').textContent =
     total === 0 ? '暂无任务' : `还剩 ${active} 项未完成`;
 
   if (visible.length === 0) {
     const msgs = {
-      all: '还没有任务，添加一个吧 ✦',
-      active: '没有进行中的任务 ✦',
-      done: '还没有完成的任务',
+      all:     '还没有任务，添加一个吧 ✦',
+      active:  '没有进行中的任务 ✦',
+      done:    '还没有完成的任务',
       overdue: '没有逾期任务，干得漂亮 ✦'
     };
-    list.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><p>${msgs[filter]||''}</p></div>`;
+    list.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><p>${msgs[filter] || ''}</p></div>`;
     return;
   }
 
@@ -562,9 +565,8 @@ function render() {
   const nodateTasks  = visible.filter(t => !t.due && !isOverdue(t));
   const doneTasks    = visible.filter(t => t.done);
 
-  // flatten with group labels (if more than one group)
-  const multiGroup = (filter === 'all' || filter === 'active') && 
-    [overdueTasks,todayTasks,futureTasks,nodateTasks].filter(g=>g.length>0).length > 1;
+  const multiGroup = (filter === 'all' || filter === 'active') &&
+    [overdueTasks, todayTasks, futureTasks, nodateTasks].filter(g => g.length > 0).length > 1;
 
   let html = '';
   function renderGroup(label, group) {
@@ -578,10 +580,10 @@ function render() {
   if (filter === 'done') {
     doneTasks.forEach(t => { html += taskHtml(t); });
   } else {
-    renderGroup('逾期', overdueTasks.filter(t=>!t.done));
-    renderGroup('今天', todayTasks.filter(t=>!t.done));
-    renderGroup('待办', nodateTasks.filter(t=>!t.done));
-    renderGroup('将来', futureTasks.filter(t=>!t.done));
+    renderGroup('逾期', overdueTasks.filter(t => !t.done));
+    renderGroup('今天', todayTasks.filter(t => !t.done));
+    renderGroup('待办', nodateTasks.filter(t => !t.done));
+    renderGroup('将来', futureTasks.filter(t => !t.done));
     if (filter === 'all' && doneTasks.length) {
       html += `<div class="group-label">已完成</div>`;
       doneTasks.forEach(t => { html += taskHtml(t); });
@@ -594,13 +596,13 @@ function render() {
 
 function taskHtml(t) {
   const over = isOverdue(t);
-  const dotClass = { high:'dot-high', med:'dot-med', low:'dot-low' }[t.priority] || 'dot-none';
-  const dateStr = t.due ? formatDate(t.due) : '';
+  const dotClass = { high: 'dot-high', med: 'dot-med', low: 'dot-low' }[t.priority] || 'dot-none';
+  const dateStr  = t.due ? formatDate(t.due) : '';
   const dateClass = over ? 'task-date overdue' : 'task-date';
-  const dateHtml = dateStr ? `<span class="${dateClass}">${over?'⚠ ':''} ${dateStr}</span>` : '';
+  const dateHtml  = dateStr ? `<span class="${dateClass}">${over ? '⚠ ' : ''} ${dateStr}</span>` : '';
 
   return `
-  <div class="task-card ${t.done?'done':''}" data-id="${t.id}">
+  <div class="task-card ${t.done ? 'done' : ''}" data-id="${t.id}">
     <span class="priority-dot ${dotClass}"></span>
     <div class="checkbox" data-action="toggle" data-id="${t.id}">
       <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -612,21 +614,21 @@ function taskHtml(t) {
       <div class="task-meta">${dateHtml}</div>
     </div>
     <div class="task-actions">
-      <button class="icon-btn" data-action="edit" data-id="${t.id}" title="编辑">✎</button>
+      <button class="icon-btn" data-action="edit"   data-id="${t.id}" title="编辑">✎</button>
       <button class="icon-btn del" data-action="delete" data-id="${t.id}" title="删除">✕</button>
     </div>
   </div>`;
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function attachCardEvents() {
   document.querySelectorAll('[data-action]').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
-      const id = el.dataset.id;
+      const id     = el.dataset.id;
       const action = el.dataset.action;
       if (action === 'toggle') toggleTask(id);
       if (action === 'delete') deleteTask(id);
@@ -635,55 +637,88 @@ function attachCardEvents() {
   });
 }
 
-// ── Actions ──
-function addTask() {
+// ── DB：新增任务 ──
+async function addTask() {
   const input = document.getElementById('new-task');
-  const text = input.value.trim();
+  const text  = input.value.trim();
   if (!text) { input.focus(); return; }
   const due = document.getElementById('due-date').value || null;
-  tasks.unshift({ id: genId(), text, done: false, priority: selectedPriority, due, created: Date.now() });
-  saveTasks();
+
+  const { data, error } = await db
+    .from('todos')
+    .insert([{ text, done: false, priority: selectedPriority, due }])
+    .select()
+    .single();
+
+  if (error) { console.error('addTask error:', error.message); return; }
+  tasks.unshift(data);
   input.value = '';
   render();
   input.focus();
 }
 
-function toggleTask(id) {
-  const t = tasks.find(t=>t.id===id);
-  if (t) { t.done = !t.done; saveTasks(); render(); }
-}
+// ── DB：切换完成状态 ──
+async function toggleTask(id) {
+  const t = tasks.find(t => String(t.id) === String(id));
+  if (!t) return;
+  const newDone = !t.done;
 
-function deleteTask(id) {
-  tasks = tasks.filter(t=>t.id!==id);
-  saveTasks();
+  const { error } = await db
+    .from('todos')
+    .update({ done: newDone })
+    .eq('id', id);
+
+  if (error) { console.error('toggleTask error:', error.message); return; }
+  t.done = newDone;
   render();
 }
 
+// ── DB：删除单条任务 ──
+async function deleteTask(id) {
+  const { error } = await db
+    .from('todos')
+    .delete()
+    .eq('id', id);
+
+  if (error) { console.error('deleteTask error:', error.message); return; }
+  tasks = tasks.filter(t => String(t.id) !== String(id));
+  render();
+}
+
+// ── 打开编辑弹窗（纯 UI，不操作 DB）──
 function openEdit(id) {
-  const t = tasks.find(t=>t.id===id);
+  const t = tasks.find(t => String(t.id) === String(id));
   if (!t) return;
   editingId = id;
   document.getElementById('modal-text').value = t.text;
   document.getElementById('modal-date').value = t.due || '';
-  // set priority pills
   document.querySelectorAll('#modal-priority .pill').forEach(p => {
-    p.classList.toggle('selected', p.dataset.p === (t.priority||'low'));
+    p.classList.toggle('selected', p.dataset.p === (t.priority || 'low'));
   });
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('modal-text').focus(), 50);
 }
 
-function saveEdit() {
+// ── DB：保存编辑 ──
+async function saveEdit() {
   if (!editingId) return;
-  const t = tasks.find(t=>t.id===editingId);
+  const t = tasks.find(t => String(t.id) === String(editingId));
   if (!t) return;
   const text = document.getElementById('modal-text').value.trim();
   if (!text) return;
-  const selPill = document.querySelector('#modal-priority .pill.selected');
-  t.text = text;
-  t.due  = document.getElementById('modal-date').value || null;
-  t.priority = selPill ? selPill.dataset.p : 'low';
-  saveTasks();
+  const selPill  = document.querySelector('#modal-priority .pill.selected');
+  const priority = selPill ? selPill.dataset.p : 'low';
+  const due      = document.getElementById('modal-date').value || null;
+
+  const { error } = await db
+    .from('todos')
+    .update({ text, priority, due })
+    .eq('id', editingId);
+
+  if (error) { console.error('saveEdit error:', error.message); return; }
+  t.text     = text;
+  t.priority = priority;
+  t.due      = due;
   closeModal();
   render();
 }
@@ -702,7 +737,7 @@ document.getElementById('new-task').addEventListener('keydown', e => {
 // Priority pills (add area)
 document.querySelectorAll('.add-options .pill').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.add-options .pill').forEach(b=>b.classList.remove('selected'));
+    document.querySelectorAll('.add-options .pill').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     selectedPriority = btn.dataset.p;
   });
@@ -711,7 +746,7 @@ document.querySelectorAll('.add-options .pill').forEach(btn => {
 // Priority pills (modal)
 document.querySelectorAll('#modal-priority .pill').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('#modal-priority .pill').forEach(b=>b.classList.remove('selected'));
+    document.querySelectorAll('#modal-priority .pill').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
   });
 });
@@ -719,22 +754,27 @@ document.querySelectorAll('#modal-priority .pill').forEach(btn => {
 // Filter
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     filter = btn.dataset.filter;
     render();
   });
 });
 
-// Clear done
-document.getElementById('clear-done').addEventListener('click', () => {
-  const n = tasks.filter(t=>t.done).length;
+// ── DB：批量删除已完成 ──
+document.getElementById('clear-done').addEventListener('click', async () => {
+  const n = tasks.filter(t => t.done).length;
   if (!n) return;
-  if (confirm(`删除 ${n} 条已完成的任务？`)) {
-    tasks = tasks.filter(t=>!t.done);
-    saveTasks();
-    render();
-  }
+  if (!confirm(`删除 ${n} 条已完成的任务？`)) return;
+
+  const { error } = await db
+    .from('todos')
+    .delete()
+    .eq('done', true);
+
+  if (error) { console.error('clear-done error:', error.message); return; }
+  tasks = tasks.filter(t => !t.done);
+  render();
 });
 
 // Modal
@@ -748,9 +788,8 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 });
 
-// ── Init ──
+// ── Init：从数据库加载后再渲染 ──
 loadTasks();
-render();
 </script>
 </body>
 </html>
