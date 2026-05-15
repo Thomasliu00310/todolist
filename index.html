@@ -788,8 +788,23 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 });
 
+// ── 监听数据库实时变动 ──
+function subscribeToChanges() {
+  db.channel('custom-all-channel')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'todos' },
+      (payload) => {
+        console.log('检测到云端变动，正在同步...', payload);
+        loadTasks();
+      }
+    )
+    .subscribe();
+}
+
 // ── Init：从数据库加载后再渲染 ──
-loadTasks();
+loadTasks();          // 首次加载
+subscribeToChanges(); // 开启实时监听
 </script>
 </body>
 </html>
