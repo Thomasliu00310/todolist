@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>待办事项</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1612;
+    --paper: #f5f0e8;
+    --cream: #ede7d9;
+    --accent: #c0392b;
+    --accent-soft: #e8d5d3;
+    --muted: #8a7f74;
+    --done: #a89f94;
+    --border: #d4c9bb;
+    --shadow: rgba(26,22,18,0.12);
+    --priority-high: #c0392b;
+    --priority-med: #d4851a;
+    --priority-low: #5a8a5a;
+  }
+
+  body {
+    font-family: 'Noto Serif SC', serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 0;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 27px,
+        rgba(196,180,160,0.18) 27px,
+        rgba(196,180,160,0.18) 28px
+      );
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 20px 20px 18px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px var(--shadow);
+  }
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  header h1 {
+    font-size: clamp(1.4rem, 5vw, 1.9rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  header h1 span {
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6em;
+    vertical-align: super;
+    margin-left: 4px;
+  }
+  .stats {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--done);
+    white-space: nowrap;
+  }
+  .filter-bar {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    background: transparent;
+    border: 1px solid rgba(245,240,232,0.2);
+    color: rgba(245,240,232,0.6);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 0.78rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .filter-btn:hover:not(.active) {
+    border-color: rgba(245,240,232,0.5);
+    color: var(--paper);
+  }
+
+  /* ── Add Area ── */
+  .add-area {
+    padding: 16px 16px 0;
+    position: relative;
+  }
+  .add-box {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .add-main {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  #new-task {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 1rem;
+    background: transparent;
+    color: var(--ink);
+  }
+  #new-task::placeholder { color: var(--muted); }
+  .add-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, background 0.2s;
+    flex-shrink: 0;
+  }
+  .add-btn:hover { transform: scale(1.1); }
+  .add-btn:active { transform: scale(0.95); }
+
+  .add-options {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .option-label { font-size: 0.75rem; color: var(--muted); }
+  .priority-pills { display: flex; gap: 5px; }
+  .pill {
+    border: 1.5px solid var(--border);
+    background: transparent;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    font-family: 'Noto Serif SC', serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+  .pill[data-p="high"].selected { background: var(--priority-high); border-color: var(--priority-high); color: #fff; }
+  .pill[data-p="med"].selected  { background: var(--priority-med);  border-color: var(--priority-med);  color: #fff; }
+  .pill[data-p="low"].selected  { background: var(--priority-low);  border-color: var(--priority-low);  color: #fff; }
+  .pill:not(.selected):hover { border-color: var(--ink); color: var(--ink); }
+
+  #due-date {
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    font-family: 'Noto Serif SC', serif;
+    color: var(--muted);
+    background: transparent;
+    outline: none;
+    cursor: pointer;
+  }
+  #due-date:focus { border-color: var(--ink); }
+
+  /* ── List ── */
+  .list-wrapper { padding: 14px 16px 80px; }
+
+  .group-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    padding: 10px 2px 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+
+  .task-card {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    box-shadow: 0 1px 4px var(--shadow);
+    transition: box-shadow 0.2s, transform 0.2s, opacity 0.3s;
+    animation: slideIn 0.22s ease;
+  }
+  @keyframes slideIn {
+    from { transform: translateY(-8px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .task-card:hover { box-shadow: 0 3px 12px var(--shadow); }
+  .task-card.done { opacity: 0.55; }
+  .task-card.done .task-text { text-decoration: line-through; color: var(--done); }
+
+  .priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+  .dot-high { background: var(--priority-high); }
+  .dot-med  { background: var(--priority-med);  }
+  .dot-low  { background: var(--priority-low);  }
+  .dot-none { background: var(--border); }
+
+  .checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    margin-top: 1px;
+  }
+  .checkbox:hover { border-color: var(--accent); }
+  .task-card.done .checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .checkbox svg { display: none; }
+  .task-card.done .checkbox svg { display: block; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    word-break: break-word;
+    color: var(--ink);
+  }
+  .task-meta {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .task-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+  }
+  .task-date.overdue { color: var(--accent); font-weight: 500; }
+
+  .task-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .task-card:hover .task-actions { opacity: 1; }
+  @media (pointer: coarse) {
+    .task-actions { opacity: 1; }
+  }
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--muted);
+    transition: all 0.15s;
+    font-size: 0.9rem;
+  }
+  .icon-btn:hover { background: var(--cream); color: var(--ink); }
+  .icon-btn.del:hover { background: var(--accent-soft); color: var(--accent); }
+
+  /* ── Edit inline ── */
+  .edit-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 0.95rem;
+    background: transparent;
+    color: var(--ink);
+    border-bottom: 1.5px solid var(--accent);
+  }
+
+  /* ── Empty ── */
+  .empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 10px; }
+  .empty p { font-size: 0.9rem; }
+
+  /* ── Bottom clear ── */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 16px;
+    background: rgba(245,240,232,0.9);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+  .clear-done {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .clear-done:hover { background: var(--accent-soft); }
+
+  /* ── Modal (Edit) ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,22,18,0.5);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--paper);
+    border-radius: 16px 16px 0 0;
+    padding: 24px 20px 40px;
+    width: 100%;
+    max-width: 540px;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .modal h3 {
+    font-size: 1rem;
+    margin-bottom: 14px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .modal-input {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 1rem;
+    background: #fff;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 14px;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-row { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    color: var(--ink);
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+  .btn:hover { opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <h1>待办<span>LIST</span></h1>
+    <span class="stats" id="stats-text">0 / 0 已完成</span>
+  </div>
+  <div class="filter-bar">
+    <button class="filter-btn active" data-filter="all">全部</button>
+    <button class="filter-btn" data-filter="active">进行中</button>
+    <button class="filter-btn" data-filter="done">已完成</button>
+    <button class="filter-btn" data-filter="overdue">逾期</button>
+  </div>
+</header>
+
+<div class="add-area">
+  <div class="add-box">
+    <div class="add-main">
+      <input id="new-task" type="text" placeholder="添加新任务…" autocomplete="off" maxlength="200">
+      <button class="add-btn" id="add-btn" title="添加">+</button>
+    </div>
+    <div class="add-options">
+      <span class="option-label">优先级：</span>
+      <div class="priority-pills">
+        <button class="pill" data-p="high">高</button>
+        <button class="pill" data-p="med">中</button>
+        <button class="pill selected" data-p="low">低</button>
+      </div>
+      <input type="date" id="due-date" title="截止日期">
+    </div>
+  </div>
+</div>
+
+<div class="list-wrapper" id="task-list"></div>
+
+<div class="bottom-bar">
+  <span id="remaining-text">暂无任务</span>
+  <button class="clear-done" id="clear-done">清除已完成</button>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>编辑任务</h3>
+    <input class="modal-input" id="modal-text" type="text" maxlength="200">
+    <div class="modal-row">
+      <span class="option-label">优先级：</span>
+      <div class="priority-pills" id="modal-priority">
+        <button class="pill" data-p="high">高</button>
+        <button class="pill" data-p="med">中</button>
+        <button class="pill" data-p="low">低</button>
+      </div>
+      <input type="date" id="modal-date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="modal-cancel">取消</button>
+      <button class="btn btn-primary" id="modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let tasks = [];
+let filter = 'all';
+let selectedPriority = 'low';
+let editingId = null;
+
+const STORAGE_KEY = 'todo_tasks_v1';
+
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) tasks = JSON.parse(raw);
+  } catch(e) { tasks = []; }
+}
+
+function saveTasks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function today() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function isOverdue(task) {
+  return task.due && !task.done && task.due < today();
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${m}/${day}`;
+}
+
+// ── Render ──
+function render() {
+  const list = document.getElementById('task-list');
+  const now = today();
+
+  let visible = tasks.filter(t => {
+    if (filter === 'active')  return !t.done;
+    if (filter === 'done')    return t.done;
+    if (filter === 'overdue') return isOverdue(t);
+    return true;
+  });
+
+  // sort: overdue first, then by priority, then by creation
+  const pOrder = { high:0, med:1, low:2, none:3 };
+  visible.sort((a,b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    const aOver = isOverdue(a) ? 0 : 1;
+    const bOver = isOverdue(b) ? 0 : 1;
+    if (aOver !== bOver) return aOver - bOver;
+    return (pOrder[a.priority]||3) - (pOrder[b.priority]||3);
+  });
+
+  const done = tasks.filter(t=>t.done).length;
+  const total = tasks.length;
+  document.getElementById('stats-text').textContent = `${done} / ${total} 已完成`;
+
+  const active = tasks.filter(t=>!t.done).length;
+  document.getElementById('remaining-text').textContent =
+    total === 0 ? '暂无任务' : `还剩 ${active} 项未完成`;
+
+  if (visible.length === 0) {
+    const msgs = {
+      all: '还没有任务，添加一个吧 ✦',
+      active: '没有进行中的任务 ✦',
+      done: '还没有完成的任务',
+      overdue: '没有逾期任务，干得漂亮 ✦'
+    };
+    list.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><p>${msgs[filter]||''}</p></div>`;
+    return;
+  }
+
+  // Group by date section
+  const overdueTasks = visible.filter(t => isOverdue(t));
+  const todayTasks   = visible.filter(t => !isOverdue(t) && t.due === now);
+  const futureTasks  = visible.filter(t => !isOverdue(t) && t.due && t.due > now);
+  const nodateTasks  = visible.filter(t => !t.due && !isOverdue(t));
+  const doneTasks    = visible.filter(t => t.done);
+
+  // flatten with group labels (if more than one group)
+  const multiGroup = (filter === 'all' || filter === 'active') && 
+    [overdueTasks,todayTasks,futureTasks,nodateTasks].filter(g=>g.length>0).length > 1;
+
+  let html = '';
+  function renderGroup(label, group) {
+    if (!group.length) return;
+    if (multiGroup && !group[0].done) {
+      html += `<div class="group-label">${label}</div>`;
+    }
+    group.forEach(t => { html += taskHtml(t); });
+  }
+
+  if (filter === 'done') {
+    doneTasks.forEach(t => { html += taskHtml(t); });
+  } else {
+    renderGroup('逾期', overdueTasks.filter(t=>!t.done));
+    renderGroup('今天', todayTasks.filter(t=>!t.done));
+    renderGroup('待办', nodateTasks.filter(t=>!t.done));
+    renderGroup('将来', futureTasks.filter(t=>!t.done));
+    if (filter === 'all' && doneTasks.length) {
+      html += `<div class="group-label">已完成</div>`;
+      doneTasks.forEach(t => { html += taskHtml(t); });
+    }
+  }
+
+  list.innerHTML = html;
+  attachCardEvents();
+}
+
+function taskHtml(t) {
+  const over = isOverdue(t);
+  const dotClass = { high:'dot-high', med:'dot-med', low:'dot-low' }[t.priority] || 'dot-none';
+  const dateStr = t.due ? formatDate(t.due) : '';
+  const dateClass = over ? 'task-date overdue' : 'task-date';
+  const dateHtml = dateStr ? `<span class="${dateClass}">${over?'⚠ ':''} ${dateStr}</span>` : '';
+
+  return `
+  <div class="task-card ${t.done?'done':''}" data-id="${t.id}">
+    <span class="priority-dot ${dotClass}"></span>
+    <div class="checkbox" data-action="toggle" data-id="${t.id}">
+      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+        <path d="M1 4L3.8 7L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="task-body">
+      <div class="task-text">${escHtml(t.text)}</div>
+      <div class="task-meta">${dateHtml}</div>
+    </div>
+    <div class="task-actions">
+      <button class="icon-btn" data-action="edit" data-id="${t.id}" title="编辑">✎</button>
+      <button class="icon-btn del" data-action="delete" data-id="${t.id}" title="删除">✕</button>
+    </div>
+  </div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function attachCardEvents() {
+  document.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = el.dataset.id;
+      const action = el.dataset.action;
+      if (action === 'toggle') toggleTask(id);
+      if (action === 'delete') deleteTask(id);
+      if (action === 'edit')   openEdit(id);
+    });
+  });
+}
+
+// ── Actions ──
+function addTask() {
+  const input = document.getElementById('new-task');
+  const text = input.value.trim();
+  if (!text) { input.focus(); return; }
+  const due = document.getElementById('due-date').value || null;
+  tasks.unshift({ id: genId(), text, done: false, priority: selectedPriority, due, created: Date.now() });
+  saveTasks();
+  input.value = '';
+  render();
+  input.focus();
+}
+
+function toggleTask(id) {
+  const t = tasks.find(t=>t.id===id);
+  if (t) { t.done = !t.done; saveTasks(); render(); }
+}
+
+function deleteTask(id) {
+  tasks = tasks.filter(t=>t.id!==id);
+  saveTasks();
+  render();
+}
+
+function openEdit(id) {
+  const t = tasks.find(t=>t.id===id);
+  if (!t) return;
+  editingId = id;
+  document.getElementById('modal-text').value = t.text;
+  document.getElementById('modal-date').value = t.due || '';
+  // set priority pills
+  document.querySelectorAll('#modal-priority .pill').forEach(p => {
+    p.classList.toggle('selected', p.dataset.p === (t.priority||'low'));
+  });
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('modal-text').focus(), 50);
+}
+
+function saveEdit() {
+  if (!editingId) return;
+  const t = tasks.find(t=>t.id===editingId);
+  if (!t) return;
+  const text = document.getElementById('modal-text').value.trim();
+  if (!text) return;
+  const selPill = document.querySelector('#modal-priority .pill.selected');
+  t.text = text;
+  t.due  = document.getElementById('modal-date').value || null;
+  t.priority = selPill ? selPill.dataset.p : 'low';
+  saveTasks();
+  closeModal();
+  render();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingId = null;
+}
+
+// ── Events ──
+document.getElementById('add-btn').addEventListener('click', addTask);
+document.getElementById('new-task').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTask();
+});
+
+// Priority pills (add area)
+document.querySelectorAll('.add-options .pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.add-options .pill').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedPriority = btn.dataset.p;
+  });
+});
+
+// Priority pills (modal)
+document.querySelectorAll('#modal-priority .pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#modal-priority .pill').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+  });
+});
+
+// Filter
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    filter = btn.dataset.filter;
+    render();
+  });
+});
+
+// Clear done
+document.getElementById('clear-done').addEventListener('click', () => {
+  const n = tasks.filter(t=>t.done).length;
+  if (!n) return;
+  if (confirm(`删除 ${n} 条已完成的任务？`)) {
+    tasks = tasks.filter(t=>!t.done);
+    saveTasks();
+    render();
+  }
+});
+
+// Modal
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal-save').addEventListener('click', saveEdit);
+document.getElementById('modal-text').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveEdit();
+  if (e.key === 'Escape') closeModal();
+});
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// ── Init ──
+loadTasks();
+render();
+</script>
+</body>
+</html>
